@@ -41,7 +41,7 @@ def health_check():
     """Simple connection check to confirm the API is online."""
     return {"status": "online"}
 
-@app.post("/login")
+@app.post("/login/")
 def login(data: LoginRequest):
     # 1. Fetch the user database from your private GitHub
     users_content = fetch_github_file("users.json")
