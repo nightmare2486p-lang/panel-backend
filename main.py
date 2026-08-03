@@ -13,7 +13,7 @@ REPO_OWNER = os.getenv("REPO_OWNER")      # Your GitHub username
 REPO_NAME = os.getenv("REPO_NAME")        # Your private repository name
 
 # Base URL for the GitHub API to fetch file contents
-GITHUB_API_URL = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/"
+GITHUB_API_URL = f"https://api.github.com{REPO_OWNER}/repos/{REPO_NAME}/contents/"
 
 class LoginRequest(BaseModel):
     username: str
