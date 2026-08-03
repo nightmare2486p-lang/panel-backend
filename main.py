@@ -5,7 +5,7 @@ import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-app = FastAPI()
+app = FastAPI(redirect_slashes=False)
 
 # These read from the cloud platform's environment configuration
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
