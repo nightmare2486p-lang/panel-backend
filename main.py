@@ -98,14 +98,22 @@ def request_access(data: LoginRequest):
 # FIX 1: Add a trailing slash right after list_requests
 @app.post("/admin/list_requests/")
 def admin_list_requests(data: LoginRequest):
-    users_db, _ = fetch_github_file_with_sha("users.json")
-    if data.username == "nightmare2486p" and users_db.get(data.username) == data.password:
-        requests_db, _ = fetch_github_file_with_sha("requests.json")
-        return {"status": "success", "requests": requests_db}
-    
-    # ERROR ROOT: If the IF check fails or your password/username has a mismatch,
-    # the function ends here without a return statement, sending back a blank string!
-    raise HTTPException(status_code=403, detail="Access denied.")
+    try:
+        users_db, _ = fetch_github_file_with_sha("users.json")
+        
+        # Enforce clean lowercase credentials matching inside the database check
+        if data.username.lower() == "nightmare2486p" and users_db.get(data.username.lower()) == data.password:
+            requests_db, _ = fetch_github_file_with_sha("requests.json")
+            return {"status": "success", "requests": requests_db}
+            
+        raise HTTPException(status_code=401, detail="Invalid administrator credentials.")
+        
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as general_err:
+        # Prevent the server from returning an empty string by catching the error text
+        raise HTTPException(status_code=500, detail=f"Server Integration Error: {str(general_err)}")
+
 
 
 # FIX 2: Add a trailing slash right after approve_request
