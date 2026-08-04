@@ -62,7 +62,17 @@ def login(data: LoginRequest):
             if not main_code:
                 raise HTTPException(status_code=500, detail="Main script missing")
                 
-            return {"status": "success", "code": main_code}
+            # UPDATE IN YOUR BACKEND APPS main.py (Inside @app.post("/login/")):
+            if users_db[data.username] == data.password:
+                main_code = fetch_github_file("Main.py")
+                if not main_code:
+                    raise HTTPException(status_code=500, detail="Main script missing")
+                    
+                # Replace the default string placeholder with the real authorized account username live
+                personalized_code = main_code.replace('CURRENT_USER = "Admin"', f'CURRENT_USER = "{data.username}"')
+        
+        return {"status": "success", "code": personalized_code}
+
             
     # Generic failure message to prevent username guessing
     raise HTTPException(status_code=401, detail="Invalid username or password")
