@@ -60,7 +60,7 @@ def commit_github_file(filename: str, content_dict: dict, sha: str, commit_msg: 
     response = requests.put(GITHUB_API_URL + filename, json=payload, headers=headers)
     
     # FIX: Restored the missing validation array values
-    if response.status_code not in:
+    if response.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail=f"Database write rejected by GitHub: {response.text}")
 
 
