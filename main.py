@@ -98,12 +98,15 @@ def request_access(data: LoginRequest):
 # FIX 1: Add a trailing slash right after list_requests
 @app.post("/admin/list_requests/")
 def admin_list_requests(data: LoginRequest):
-    """Exposes pending registration requests exclusively to the authorized system administrator."""
     users_db, _ = fetch_github_file_with_sha("users.json")
     if data.username == "nightmare2486p" and users_db.get(data.username) == data.password:
         requests_db, _ = fetch_github_file_with_sha("requests.json")
         return {"status": "success", "requests": requests_db}
-    raise HTTPException(status_code=403, detail="Access denied. Administrator privileges required.")
+    
+    # ERROR ROOT: If the IF check fails or your password/username has a mismatch,
+    # the function ends here without a return statement, sending back a blank string!
+    raise HTTPException(status_code=403, detail="Access denied.")
+
 
 # FIX 2: Add a trailing slash right after approve_request
 @app.post("/admin/approve_request/")
