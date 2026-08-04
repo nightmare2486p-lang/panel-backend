@@ -100,7 +100,7 @@ def request_access(data: LoginRequest):
 def admin_list_requests(data: LoginRequest):
     """Exposes pending registration requests exclusively to the authorized system administrator."""
     users_db, _ = fetch_github_file_with_sha("users.json")
-    if data.username == "Nightmare2486p" and users_db.get(data.username) == data.password:
+    if data.username == "nightmare2486p" and users_db.get(data.username) == data.password:
         requests_db, _ = fetch_github_file_with_sha("requests.json")
         return {"status": "success", "requests": requests_db}
     raise HTTPException(status_code=403, detail="Access denied. Administrator privileges required.")
@@ -110,7 +110,7 @@ def admin_list_requests(data: LoginRequest):
 def admin_approve_request(data: AdminActionRequest):
     """Validates approval parameters and migrates requests from requests.json into active status inside users.json."""
     users_db, u_sha = fetch_github_file_with_sha("users.json")
-    if data.admin_user == "Nightmare2486p" and users_db.get(data.admin_user) == data.admin_pass:
+    if data.admin_user == "nightmare2486p" and users_db.get(data.admin_user) == data.admin_pass:
         requests_db, r_sha = fetch_github_file_with_sha("requests.json")
         
         if data.target_user not in requests_db:
