@@ -7,65 +7,113 @@ from pydantic import BaseModel
 
 app = FastAPI(redirect_slashes=False)
 
-# These read from the cloud platform's environment configuration
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO_OWNER = os.getenv("REPO_OWNER")      # Your GitHub username
-REPO_NAME = os.getenv("REPO_NAME")        # Your private repository name
-
-# Base URL for the GitHub API to fetch file contents
-GITHUB_API_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/"
+REPO_OWNER = os.getenv("REPO_OWNER")
+REPO_NAME = os.getenv("REPO_NAME")
+GITHUB_API_URL = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/"
 
 class LoginRequest(BaseModel):
     username: str
     password: str
 
-def fetch_github_file(filename: str) -> str:
-    """Safely connects to GitHub API using the private token to get a file."""
+class AdminActionRequest(BaseModel):
+    admin_user: str
+    admin_pass: str
+    target_user: str
+    target_pass: str = ""
+
+def fetch_github_file_with_sha(filename: str):
+    """Fetes a file and returns its parsed content along with its unique GitHub SHA hash."""
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+    response = requests.get(GITHUB_API_URL + filename, headers=headers)
+    if response.status_code == 200:
+        file_data = response.json()
+        decoded_text = base64.b64decode(file_data['content']).decode('utf-8')
+        return json.loads(decoded_text), file_data['sha']
+    elif response.status_code == 404:
+        return {}, None
+    raise HTTPException(status_code=500, detail=f"Failed to reach database file: {filename}")
+
+def commit_github_file(filename: str, content_dict: dict, sha: str, commit_msg: str):
+    """Safely writes updated data structures back to the private GitHub repository."""
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+        "Content-Type": "application/json"
     }
+    updated_bytes = json.dumps(content_dict, indent=2).encode('utf-8')
+    encoded_content = base64.b64encode(updated_bytes).decode('utf-8')
     
-    response = requests.get(GITHUB_API_URL + filename, headers=headers)
-    
-    if response.status_code == 200:
-        file_data = response.json()
-        # GitHub encodes file text into Base64 strings; we must decode it back to plain text
-        decoded_bytes = base64.b64decode(file_data['content'])
-        return decoded_bytes.decode('utf-8')
-    return None
+    payload = {
+        "message": commit_msg,
+        "content": encoded_content
+    }
+    if sha:
+        payload["sha"] = sha
+
+    response = requests.put(GITHUB_API_URL + filename, json=payload, headers=headers)
+    if response.status_code not in:
+        raise HTTPException(status_code=500, detail=f"Database write rejected by GitHub: {response.text}")
 
 @app.get("/")
 def health_check():
-    """Simple connection check to confirm the API is online."""
     return {"status": "online"}
 
 @app.post("/login/")
 def login(data: LoginRequest):
-    # 1. Fetch the user database from your private GitHub
-    users_content = fetch_github_file("users.json")
-    if not users_content:
-        raise HTTPException(status_code=500, detail="Database inaccessible")
-    
-    try:
-        users_db = json.loads(users_content)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Database corruption error")
-    
-    # 2. Check credentials
-    if data.username in users_db:
-        if users_db[data.username] == data.password:
-            
-            # 3. If correct, fetch Main.py from the private repo
-            main_code = fetch_github_file("Main.py")
-            if not main_code:
-                raise HTTPException(status_code=500, detail="Main script missing")
-                
-            # Clean injection: Replace default placeholder string with live username 
-            personalized_code = main_code.replace('CURRENT_USER = "Admin"', f'CURRENT_USER = "{data.username}"')
-            
+    users_db, _ = fetch_github_file_with_sha("users.json")
+    if data.username in users_db and users_db[data.username] == data.password:
+        main_code = fetch_github_file_with_sha("Main.py") # Fetch main code text
+        headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
+        resp = requests.get(GITHUB_API_URL + "Main.py", headers=headers)
+        if resp.status_code == 200:
+            raw_code = base64.b64decode(resp.json()['content']).decode('utf-8')
+            # Inject the active validated username context into RAM live
+            personalized_code = raw_code.replace('CURRENT_USER = "Admin"', f'CURRENT_USER = "{data.username}"')
             return {"status": "success", "code": personalized_code}
-            
-    # Generic failure message to prevent username guessing
     raise HTTPException(status_code=401, detail="Invalid username or password")
+
+@app.post("/request_access/")
+def request_access(data: LoginRequest):
+    """Allows any client to submit an access request with their choice of password."""
+    users_db, _ = fetch_github_file_with_sha("users.json")
+    if data.username in users_db:
+        raise HTTPException(status_code=400, detail="Username already active or registered.")
+        
+    requests_db, sha = fetch_github_file_with_sha("requests.json")
+    requests_db[data.username] = data.password
+    commit_github_file("requests.json", requests_db, sha, f"Access request submitted by {data.username}")
+    return {"status": "pending", "message": "Request logged successfully. Awaiting Admin authorization."}
+
+@app.post("/admin/list_requests/")
+def admin_list_requests(data: LoginRequest):
+    """Returns all pending account creations exclusively if requested by the administrator."""
+    users_db, _ = fetch_github_file_with_sha("users.json")
+    if data.username == "Nightmare2486p" and users_db.get(data.username) == data.password:
+        requests_db, _ = fetch_github_file_with_sha("requests.json")
+        return {"status": "success", "requests": requests_db}
+    raise HTTPException(status_code=403, detail="Access denied. Administrator privileges required.")
+
+@app.post("/admin/approve_request/")
+def admin_approve_request(data: AdminActionRequest):
+    """Transfers a profile from requests.json to users.json, updating the access roster."""
+    users_db, u_sha = fetch_github_file_with_sha("users.json")
+    if data.admin_user == "Nightmare2486p" and users_db.get(data.admin_user) == data.admin_pass:
+        requests_db, r_sha = fetch_github_file_with_sha("requests.json")
+        
+        if data.target_user not in requests_db:
+            raise HTTPException(status_code=404, detail="Target request profile not found.")
+            
+        # Move target to main database
+        users_db[data.target_user] = requests_db[data.target_user]
+        del requests_db[data.target_user]
+        
+        # Commit changes to GitHub sequentially
+        commit_github_file("users.json", users_db, u_sha, f"Admin approved account: {data.target_user}")
+        commit_github_file("requests.json", requests_db, r_sha, f"Cleaned request pool for: {data.target_user}")
+        return {"status": "success", "message": f"Successfully authorized user account: {data.target_user}"}
+    raise HTTPException(status_code=403, detail="Access denied.")
+
