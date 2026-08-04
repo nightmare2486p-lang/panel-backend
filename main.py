@@ -95,6 +95,7 @@ def request_access(data: LoginRequest):
     commit_github_file("requests.json", requests_db, sha, f"Access request submitted by {data.username}")
     return {"status": "pending", "message": "Request logged successfully. Awaiting Admin authorization."}
 
+# FIX 1: Add a trailing slash right after list_requests
 @app.post("/admin/list_requests/")
 def admin_list_requests(data: LoginRequest):
     """Exposes pending registration requests exclusively to the authorized system administrator."""
@@ -104,6 +105,7 @@ def admin_list_requests(data: LoginRequest):
         return {"status": "success", "requests": requests_db}
     raise HTTPException(status_code=403, detail="Access denied. Administrator privileges required.")
 
+# FIX 2: Add a trailing slash right after approve_request
 @app.post("/admin/approve_request/")
 def admin_approve_request(data: AdminActionRequest):
     """Validates approval parameters and migrates requests from requests.json into active status inside users.json."""
