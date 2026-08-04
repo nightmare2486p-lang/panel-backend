@@ -13,7 +13,7 @@ REPO_OWNER = os.getenv("REPO_OWNER")
 REPO_NAME = os.getenv("REPO_NAME")        
 
 # Structural GitHub API link mapper
-GITHUB_API_URL = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/"
+GITHUB_API_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/"
 
 class LoginRequest(BaseModel):
     username: str
