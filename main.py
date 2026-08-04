@@ -7,9 +7,12 @@ from pydantic import BaseModel
 
 app = FastAPI(redirect_slashes=False)
 
+# Environmental variables managed via Render's dashboard
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO_OWNER = os.getenv("REPO_OWNER")
-REPO_NAME = os.getenv("REPO_NAME")
+REPO_OWNER = os.getenv("REPO_OWNER")      
+REPO_NAME = os.getenv("REPO_NAME")        
+
+# Structural GitHub API link mapper
 GITHUB_API_URL = f"https://github.com{REPO_OWNER}/{REPO_NAME}/contents/"
 
 class LoginRequest(BaseModel):
@@ -23,7 +26,7 @@ class AdminActionRequest(BaseModel):
     target_pass: str = ""
 
 def fetch_github_file_with_sha(filename: str):
-    """Fetes a file and returns its parsed content along with its unique GitHub SHA hash."""
+    """Fetches a file and returns its parsed content along with its unique GitHub SHA hash."""
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Accept": "application/vnd.github+json"
@@ -60,25 +63,26 @@ def commit_github_file(filename: str, content_dict: dict, sha: str, commit_msg: 
 
 @app.get("/")
 def health_check():
+    """Simple connectivity verification route."""
     return {"status": "online"}
 
 @app.post("/login/")
 def login(data: LoginRequest):
+    """Authenticates users and dynamically streams Main.py with the active user injected."""
     users_db, _ = fetch_github_file_with_sha("users.json")
     if data.username in users_db and users_db[data.username] == data.password:
-        main_code = fetch_github_file_with_sha("Main.py") # Fetch main code text
         headers = {"Authorization": f"Bearer {GITHUB_TOKEN}"}
         resp = requests.get(GITHUB_API_URL + "Main.py", headers=headers)
         if resp.status_code == 200:
             raw_code = base64.b64decode(resp.json()['content']).decode('utf-8')
-            # Inject the active validated username context into RAM live
+            # Personalize code output to pass user info inside memory execution layers safely
             personalized_code = raw_code.replace('CURRENT_USER = "Admin"', f'CURRENT_USER = "{data.username}"')
             return {"status": "success", "code": personalized_code}
     raise HTTPException(status_code=401, detail="Invalid username or password")
 
 @app.post("/request_access/")
 def request_access(data: LoginRequest):
-    """Allows any client to submit an access request with their choice of password."""
+    """Logs a prospective client registration entry inside requests.json."""
     users_db, _ = fetch_github_file_with_sha("users.json")
     if data.username in users_db:
         raise HTTPException(status_code=400, detail="Username already active or registered.")
@@ -90,7 +94,7 @@ def request_access(data: LoginRequest):
 
 @app.post("/admin/list_requests/")
 def admin_list_requests(data: LoginRequest):
-    """Returns all pending account creations exclusively if requested by the administrator."""
+    """Exposes pending registration requests exclusively to the authorized system administrator."""
     users_db, _ = fetch_github_file_with_sha("users.json")
     if data.username == "Nightmare2486p" and users_db.get(data.username) == data.password:
         requests_db, _ = fetch_github_file_with_sha("requests.json")
@@ -99,7 +103,7 @@ def admin_list_requests(data: LoginRequest):
 
 @app.post("/admin/approve_request/")
 def admin_approve_request(data: AdminActionRequest):
-    """Transfers a profile from requests.json to users.json, updating the access roster."""
+    """Validates approval parameters and migrates requests from requests.json into active status inside users.json."""
     users_db, u_sha = fetch_github_file_with_sha("users.json")
     if data.admin_user == "Nightmare2486p" and users_db.get(data.admin_user) == data.admin_pass:
         requests_db, r_sha = fetch_github_file_with_sha("requests.json")
@@ -107,13 +111,12 @@ def admin_approve_request(data: AdminActionRequest):
         if data.target_user not in requests_db:
             raise HTTPException(status_code=404, detail="Target request profile not found.")
             
-        # Move target to main database
+        # Migrate credentials seamlessly
         users_db[data.target_user] = requests_db[data.target_user]
         del requests_db[data.target_user]
         
-        # Commit changes to GitHub sequentially
+        # Sequentially sync adjustments live back onto GitHub storage instances
         commit_github_file("users.json", users_db, u_sha, f"Admin approved account: {data.target_user}")
         commit_github_file("requests.json", requests_db, r_sha, f"Cleaned request pool for: {data.target_user}")
         return {"status": "success", "message": f"Successfully authorized user account: {data.target_user}"}
     raise HTTPException(status_code=403, detail="Access denied.")
-
